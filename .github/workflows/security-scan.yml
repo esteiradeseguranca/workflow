@@ -42,6 +42,22 @@ name: Esteira de Segurança — Scan
 # autenticado pelo token do cliente). Todas as demais actions esperam
 # $ESTEIRA_WORKFLOW_DIR já populado por esse passo — por isso ele roda
 # primeiro, logo depois do checkout.
+#
+# IMPORTANTE #4: o passo "Cache de dependências Maven" (antes do Trivy)
+# usa `actions/cache@v4` — official do GitHub, não uma composite action
+# nossa, por isso é o único `uses:` deste arquivo (fora `checkout`/
+# `upload-artifact`) que NÃO segue o padrão "owner/repo/path@ref" descrito
+# no IMPORTANTE #2. Existe pra mitigar um problema real, achado testando
+# contra o cliente piloto: escanear um projeto Maven grande (WebGoat) fez
+# o Trivy bater no rate limit (429) do Maven Central ao resolver
+# parent/BOM POMs ao vivo — `actions/cache` persiste `~/.m2/repository`
+# ENTRE execuções (chave por hash de `**/pom.xml`), e
+# `warm-maven-cache@v1` roda `mvn dependency:go-offline` ANTES do Trivy
+# pra popular esse cache — ver docstring de scripts/warm-maven-cache.sh.
+# A partir do segundo scan do mesmo repositório, o Trivy encontra os POMs
+# já resolvidos localmente e evita boa parte das chamadas ao Maven
+# Central. Não elimina o risco por completo (dependência nova ainda
+# precisa ser resolvida ao vivo), mas reduz bastante a superfície.
 
 on:
   workflow_call:
@@ -106,6 +122,19 @@ jobs:
       - name: Gitleaks (segredos)
         if: steps.entitlements.outputs.gitleaks == 'true'
         uses: esteiradeseguranca/workflow/actions/run-gitleaks@v1
+
+      - name: Cache de dependências Maven (repositórios Java, antes do Trivy)
+        if: steps.entitlements.outputs.trivy_fs == 'true' && hashFiles('**/pom.xml') != ''
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Aquecer cache Maven (antes do Trivy)
+        if: steps.entitlements.outputs.trivy_fs == 'true'
+        uses: esteiradeseguranca/workflow/actions/warm-maven-cache@v1
 
       - name: Trivy (SCA / dependências)
         if: steps.entitlements.outputs.trivy_fs == 'true'
