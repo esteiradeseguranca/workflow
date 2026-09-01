@@ -1,0 +1,33 @@
+name: "Fetch Toolkit"
+description: >-
+  Baixa o bundle privado de scripts/+rules/ (GET /v1/toolkit) e prepara
+  ESTEIRA_WORKFLOW_DIR pras demais actions — scripts/ e rules/ NÃO vivem
+  mais neste repositório público, ver docs/roadmap.md do repositório
+  privado.
+
+inputs:
+  api-url:
+    description: "Base da API da Esteira de Segurança"
+    required: false
+    default: "https://api.esteiradeseguranca.com.br"
+  token:
+    description: "Token do cliente (secret)"
+    required: true
+  ref:
+    description: >-
+      Tag do toolkit a buscar — deve acompanhar a tag deste workflow
+      (mesmo valor de "actions-ref" em security-scan.yml).
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      env:
+        ESTEIRA_API_URL: ${{ inputs.api-url }}
+        ESTEIRA_TOKEN: ${{ inputs.token }}
+        ESTEIRA_TOOLKIT_REF: ${{ inputs.ref }}
+      # fetch-toolkit.sh mora DENTRO desta action (não em scripts/, que é
+      # justamente o que ainda não existe localmente neste ponto do job)
+      # — self-contido no repositório público.
+      run: "${{ github.action_path }}/fetch-toolkit.sh"

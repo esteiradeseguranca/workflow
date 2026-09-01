@@ -1,0 +1,32 @@
+# Exemplo de workflow para o repositório do CLIENTE.
+#
+# Copie este arquivo para `.github/workflows/esteira-seguranca.yml` no
+# repositório que você quer proteger.
+#
+# Passos de setup:
+#   1. Peça seu token na área administrativa da Esteira de Segurança.
+#   2. No seu repositório: Settings → Secrets and variables → Actions →
+#      New repository secret → nome "ESTEIRA_TOKEN", valor = o token recebido.
+#   3. Adicione este arquivo em .github/workflows/.
+#   4. Faça um push ou abra um PR — o scan roda automaticamente.
+#
+# O código-fonte do seu repositório nunca é enviado para nós: o scan roda
+# inteiramente no seu próprio runner do GitHub Actions. Só o resultado do
+# scan (lista de achados) é enviado para o nosso dashboard.
+
+name: Esteira de Segurança
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  scan:
+    uses: esteiradeseguranca/workflow/.github/workflows/security-scan.yml@v1
+    secrets:
+      token: ${{ secrets.ESTEIRA_TOKEN }}
+    # Opcional: descomente para bloquear o merge quando houver achado crítico
+    # with:
+    #   fail-on-critical: true

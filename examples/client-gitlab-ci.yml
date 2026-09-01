@@ -1,0 +1,33 @@
+# Exemplo de .gitlab-ci.yml para o repositório do CLIENTE (GitLab).
+#
+# Copie este arquivo para `.gitlab-ci.yml` na raiz do repositório que você
+# quer proteger (ou acrescente o `include:` abaixo a um `.gitlab-ci.yml` já
+# existente).
+#
+# Passos de setup:
+#   1. Peça seu token na área administrativa da Esteira de Segurança.
+#   2. No seu projeto GitLab: Settings → CI/CD → Variables → Add variable →
+#      key "ESTEIRA_TOKEN", value = o token recebido. Marque "Protect
+#      variable" e "Mask variable".
+#   3. Adicione este arquivo (ou o `include:` abaixo) como `.gitlab-ci.yml`.
+#   4. Faça um push ou abra um merge request — o scan roda automaticamente.
+#
+# O código-fonte do seu repositório nunca é enviado para nós: o scan roda
+# inteiramente no runner do seu próprio projeto GitLab. Só o resultado do
+# scan (lista de achados) é enviado para o nosso dashboard.
+
+include:
+  - remote: "https://raw.githubusercontent.com/esteiradeseguranca/workflow/v1/.gitlab/security-scan.yml"
+
+# Opcional: descomente para bloquear o merge quando houver achado crítico
+# variables:
+#   ESTEIRA_FAIL_ON_CRITICAL: "true"
+
+# Opcional: sobrescreva quando quiser rodar o scan também fora de merge
+# requests / branch padrão — redefinir o job com o mesmo nome do include
+# faz merge, não substituição total.
+# esteira-security-scan:
+#   rules:
+#     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+#     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+#     - if: '$CI_COMMIT_TAG'

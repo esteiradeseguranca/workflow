@@ -1,0 +1,92 @@
+# Template reusável de CI/CD para GitLab — equivalente ao reusable workflow
+# do GitHub Actions (`.github/workflows/security-scan.yml`) pra clientes que
+# usam GitLab em vez de GitHub.
+#
+# Como o cliente usa: `include:` este arquivo no `.gitlab-ci.yml` dele — ver
+# `examples/client-gitlab-ci.yml`. Resumo: o cliente cria uma CI/CD variable
+# protegida chamada `ESTEIRA_TOKEN` (Settings → CI/CD → Variables) com o
+# token recebido na área administrativa, e inclui este template.
+#
+# Diferença de arquitetura vs. o reusable workflow do GitHub Actions: o
+# `include:` do GitLab CI só mescla CONFIGURAÇÃO YAML — não dá a este job
+# acesso automático a nenhum arquivo do repositório referenciado. Por isso
+# o `before_script` abaixo BAIXA o bundle de `scripts/`+`rules/` (o "molho
+# secreto" de verdade do produto, que NÃO vive neste repositório público
+# nem em nenhum outro repositório git — fica só no repositório PRIVADO,
+# servido sob demanda) via `GET /v1/toolkit`, autenticado pelo mesmo
+# `ESTEIRA_TOKEN` usado no resto do job — ver a orquestração completa (e o
+# motivo do isolamento em `src-checkout/`) em `scripts/gitlab-entrypoint.sh`
+# (esse script também vem de dentro do bundle baixado, não deste
+# repositório — por isso não há nada dele aqui).
+#
+# `docker:24.0.5-cli` + serviço `docker:24.0.5-dind` + `DOCKER_TLS_CERTDIR`
+# é a configuração oficial recomendada pra Docker-in-Docker com TLS no
+# executor Docker (runner compartilhado do GitLab.com incluso) — ver
+# https://docs.gitlab.com/ci/docker/docker_in_docker/. É essa combinação
+# que permite os `docker run ...` dentro de scripts/run-*.sh (as mesmas
+# imagens pinadas usadas pelo lado GitHub Actions — Semgrep, Gitleaks,
+# Trivy, Checkov, Syft) rodarem aqui também.
+
+variables:
+  DOCKER_TLS_CERTDIR: "/certs"
+  # GIT_DEPTH "0" = histórico completo no checkout nativo do GitLab CI —
+  # equivalente ao `fetch-depth: 0` do lado GitHub Actions. Necessário pro
+  # Gitleaks conseguir escanear commits antigos, não só o HEAD.
+  GIT_DEPTH: "0"
+  # TAMBÉM usado como a tag do bundle buscado em GET /v1/toolkit (ver
+  # before_script abaixo) — cortar uma tag nova deste template sempre
+  # exige subir um bundle correspondente pela área administrativa
+  # (Workflow → nova tag), mesmo princípio do "actions-ref" do lado
+  # GitHub Actions (security-scan.yml).
+  ESTEIRA_WORKFLOW_REF: "v1"
+  ESTEIRA_API_URL: "https://api.esteiradeseguranca.com.br"
+  # Sobrescreva no `.gitlab-ci.yml` do cliente (variables: no job, ou uma
+  # CI/CD variable de projeto) pra bloquear o pipeline quando houver achado
+  # crítico — ver `scripts/check_critical.py` pro que conta como crítico e
+  # `actions/check-critical/` pro equivalente do lado GitHub Actions.
+  ESTEIRA_FAIL_ON_CRITICAL: "false"
+
+esteira-security-scan:
+  image: docker:24.0.5-cli
+  services:
+    - docker:24.0.5-dind
+  # Sem `stage:` de propósito — cai no stage `test`, que existe por padrão
+  # mesmo sem declarar `stages:`, pra não colidir com os stages que o
+  # cliente já tiver definido no próprio `.gitlab-ci.yml`. O cliente pode
+  # sobrescrever isso (e qualquer outra chave abaixo) redefinindo o job com
+  # o mesmo nome depois do `include:` — ver `examples/client-gitlab-ci.yml`.
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+  before_script:
+    - apk add --no-cache bash curl jq unzip python3
+    - |
+      set -e
+      # zip/headers em /tmp, de PROPÓSITO — não em $CI_PROJECT_DIR: são só
+      # consumidos por este próprio shell (curl + unzip), nenhum `docker
+      # run` precisa vê-los, e deixá-los soltos na raiz do projeto faria o
+      # `find ... -mindepth 1 -maxdepth 1` de gitlab-entrypoint.sh varrer
+      # esses arquivos pra dentro de src-checkout/ junto com o código do
+      # cliente (só .esteira-workflow/ e src-checkout/ são ignorados por
+      # aquele find).
+      mkdir -p .esteira-workflow
+      http_status=$(curl -sS -o /tmp/esteira-toolkit.zip -D /tmp/esteira-toolkit-headers.txt -w "%{http_code}" -m 30 \
+        -H "Authorization: Bearer ${ESTEIRA_TOKEN}" \
+        "${ESTEIRA_API_URL}/v1/toolkit?ref=${ESTEIRA_WORKFLOW_REF}")
+      if [ "$http_status" != "200" ]; then
+        echo "Erro ao buscar o toolkit (GET /v1/toolkit?ref=${ESTEIRA_WORKFLOW_REF}): HTTP ${http_status}"
+        cat /tmp/esteira-toolkit.zip
+        exit 1
+      fi
+      deprecation=$(grep -i "^x-esteira-deprecation:" /tmp/esteira-toolkit-headers.txt | sed 's/^[^:]*: *//' | tr -d '\r' || true)
+      if [ -n "$deprecation" ]; then
+        echo "AVISO: $(python3 -c "import urllib.parse, sys; print(urllib.parse.unquote(sys.argv[1]))" "$deprecation")"
+      fi
+      unzip -q -o /tmp/esteira-toolkit.zip -d .esteira-workflow
+  script:
+    - bash .esteira-workflow/scripts/gitlab-entrypoint.sh
+  artifacts:
+    when: always
+    paths:
+      - src-checkout/results/
+    expire_in: 30 days

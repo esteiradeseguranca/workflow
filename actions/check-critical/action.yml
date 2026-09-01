@@ -1,0 +1,50 @@
+name: "Check Critical Findings"
+description: >-
+  Falha o job se algum achado crítico for encontrado nos resultados brutos
+  em `results/` — sustenta o input `fail-on-critical` do reusable workflow.
+  Checagem best-effort sobre o JSON de cada ferramenta, não a avaliação
+  definitiva (que acontece no DefectDojo depois da deduplicação) — ver
+  docstring de scripts/check_critical.py pro vocabulário de severidade de
+  cada ferramenta.
+
+inputs:
+  results-dir:
+    description: "Diretório com os resultados (mesmo usado pelas outras actions)"
+    required: false
+    default: "results"
+  api-url:
+    description: >-
+      Base da API da Esteira de Segurança — usada pra consultar
+      GET /v1/checkov-severity-overrides (quais check_id do Checkov foram
+      classificados como "alta" na área administrativa, ver
+      app/routers/admin/checkov_classifications.py) e
+      GET /v1/released-findings (achados que o cliente já marcou "liberado
+      temporariamente" no dashboard e ainda não venceram, ver
+      app/services/portal_findings.py). Opcional: sem isso (ou se a
+      consulta falhar), achado do Checkov simplesmente não conta pro
+      fail-on-critical e nenhum achado é liberado por prazo, igual ao
+      comportamento antes destas funcionalidades existirem — nunca quebra
+      o workflow por causa da nossa API estar fora do ar.
+    required: false
+    default: ""
+  token:
+    description: "Token do cliente (secret) — mesmo usado nas outras actions, pra autenticar a consulta acima"
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      env:
+        RESULTS_DIR: ${{ inputs.results-dir }}
+        ESTEIRA_API_URL: ${{ inputs.api-url }}
+        ESTEIRA_TOKEN: ${{ inputs.token }}
+      # scripts/run-check-critical.sh NÃO engole o exit code (ao contrário
+      # dos demais scripts run-*.sh) — o objetivo desta action é justamente
+      # FALHAR o job quando há achado crítico; engolir o exit code aqui
+      # anularia o fail-on-critical inteiro.
+      # $ESTEIRA_WORKFLOW_DIR vem da action "Fetch Toolkit" (steps
+      # anteriores do job, exportado via $GITHUB_ENV) — scripts/ não
+      # vive mais neste repositório público.
+      run: "$ESTEIRA_WORKFLOW_DIR/scripts/run-check-critical.sh"

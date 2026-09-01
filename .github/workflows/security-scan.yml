@@ -1,0 +1,131 @@
+name: Esteira de Segurança — Scan
+
+# Reusable workflow: o cliente referencia este arquivo a partir do
+# repositório dele (veja examples/client-workflow.yml). O código-fonte nunca
+# sai do runner do cliente — só os resultados do scan são enviados para a
+# nossa API.
+#
+# IMPORTANTE sobre as composite actions usadas abaixo (actions/run-*): elas
+# NÃO são referenciadas com caminho local ("./actions/..."). Quando este
+# workflow roda como reusable workflow chamado por outro repositório, o
+# checkout ativo é o do repositório do CLIENTE — um "uses: ./actions/x"
+# resolveria (incorretamente) contra o repo do cliente, não contra o nosso.
+# Por isso usamos a forma "owner/repo/path@ref", que sempre aponta para este
+# repositório, independente de quem chamou o workflow.
+#
+# IMPORTANTE #2: este repositório é PÚBLICO (necessário — reusable workflow
+# privado só funciona pra chamador dentro da MESMA organização, e clientes
+# são empresas externas), mas só contém ORQUESTRAÇÃO (este arquivo +
+# actions/ + .gitlab/ + examples/). scripts/ e rules/ — o "molho secreto"
+# de verdade do produto — ficam num repositório PRIVADO separado, servidos
+# sob demanda pelo passo "Buscar toolkit" abaixo (GET /v1/toolkit,
+# autenticado pelo token do cliente). Todas as demais actions esperam
+# $ESTEIRA_WORKFLOW_DIR já populado por esse passo — por isso ele roda
+# primeiro, logo depois do checkout.
+
+on:
+  workflow_call:
+    inputs:
+      api-url:
+        description: "Base da API da Esteira de Segurança (normalmente não precisa alterar)"
+        type: string
+        required: false
+        default: "https://api.esteiradeseguranca.com.br"
+      fail-on-critical:
+        description: "Se true, falha o job quando algum achado CRÍTICO for encontrado"
+        type: boolean
+        required: false
+        default: false
+      actions-source:
+        description: "[uso interno] owner/repo onde vivem as composite actions desta esteira"
+        type: string
+        required: false
+        default: "esteiradeseguranca/workflow"
+      actions-ref:
+        description: >-
+          [uso interno] tag/ref das composite actions — deve acompanhar a
+          tag deste workflow. TAMBÉM usado como a tag do bundle buscado em
+          GET /v1/toolkit (ver "Buscar toolkit" abaixo) — cortar uma tag
+          nova do workflow sempre exige subir um bundle correspondente
+          pela área administrativa (Workflow → nova tag).
+        type: string
+        required: false
+        default: "v1"
+    secrets:
+      token:
+        description: "Token do cliente, gerado na área administrativa da Esteira de Segurança"
+        required: true
+
+jobs:
+  scan:
+    name: Scan de segurança
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout do repositório
+        uses: actions/checkout@v4
+        with:
+          # histórico completo — necessário para o Gitleaks varrer commits antigos
+          fetch-depth: 0
+
+      - name: Buscar toolkit (scripts/regras privadas)
+        uses: ${{ inputs.actions-source }}/actions/fetch-toolkit@${{ inputs.actions-ref }}
+        with:
+          api-url: ${{ inputs.api-url }}
+          token: ${{ secrets.token }}
+          ref: ${{ inputs.actions-ref }}
+
+      - name: Consultar plano contratado (entitlements)
+        id: entitlements
+        uses: ${{ inputs.actions-source }}/actions/fetch-entitlements@${{ inputs.actions-ref }}
+        with:
+          api-url: ${{ inputs.api-url }}
+          token: ${{ secrets.token }}
+
+      - name: Semgrep (SAST)
+        if: steps.entitlements.outputs.semgrep == 'true'
+        uses: ${{ inputs.actions-source }}/actions/run-semgrep@${{ inputs.actions-ref }}
+
+      - name: Gitleaks (segredos)
+        if: steps.entitlements.outputs.gitleaks == 'true'
+        uses: ${{ inputs.actions-source }}/actions/run-gitleaks@${{ inputs.actions-ref }}
+
+      - name: Trivy (SCA / dependências)
+        if: steps.entitlements.outputs.trivy_fs == 'true'
+        uses: ${{ inputs.actions-source }}/actions/run-trivy-fs@${{ inputs.actions-ref }}
+
+      - name: Checkov (IaC)
+        if: steps.entitlements.outputs.checkov == 'true'
+        uses: ${{ inputs.actions-source }}/actions/run-checkov@${{ inputs.actions-ref }}
+
+      - name: SBOM (Syft)
+        if: steps.entitlements.outputs.sbom == 'true'
+        uses: ${{ inputs.actions-source }}/actions/run-sbom@${{ inputs.actions-ref }}
+
+      - name: Verificação de EOL (endoflife.date)
+        if: steps.entitlements.outputs.eol_check == 'true'
+        uses: ${{ inputs.actions-source }}/actions/run-eol-check@${{ inputs.actions-ref }}
+
+      - name: Guardar resultados como artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: esteira-seguranca-results
+          path: results/
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Enviar resultados para a Esteira de Segurança
+        if: always()
+        uses: ${{ inputs.actions-source }}/actions/submit-results@${{ inputs.actions-ref }}
+        with:
+          api-url: ${{ inputs.api-url }}
+          token: ${{ secrets.token }}
+
+      - name: Verificar achados críticos
+        if: inputs.fail-on-critical == true
+        uses: ${{ inputs.actions-source }}/actions/check-critical@${{ inputs.actions-ref }}
+        with:
+          api-url: ${{ inputs.api-url }}
+          token: ${{ secrets.token }}

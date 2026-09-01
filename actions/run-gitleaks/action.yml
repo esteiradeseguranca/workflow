@@ -1,0 +1,19 @@
+name: "Run Gitleaks"
+description: "Detecção de segredos — varre o histórico do git em busca de chaves/credenciais expostas"
+
+inputs:
+  results-dir:
+    description: "Diretório onde salvar o resultado (gitleaks.json)"
+    required: false
+    default: "results"
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      env:
+        RESULTS_DIR: ${{ inputs.results-dir }}
+      # $ESTEIRA_WORKFLOW_DIR vem da action "Fetch Toolkit" (steps
+      # anteriores do job) — scripts/ não vive mais neste repositório
+      # público.
+      run: "$ESTEIRA_WORKFLOW_DIR/scripts/run-gitleaks.sh"

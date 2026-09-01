@@ -1,0 +1,28 @@
+name: "Submit Results"
+description: "Envia os resultados dos scanners para a API da Esteira de Segurança"
+
+inputs:
+  api-url:
+    description: "Base da API da Esteira de Segurança"
+    required: false
+    default: "https://api.esteiradeseguranca.com.br"
+  token:
+    description: "Token do cliente (secret)"
+    required: true
+  results-dir:
+    description: "Diretório com os arquivos de resultado (um .json por ferramenta)"
+    required: false
+    default: "results"
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      env:
+        ESTEIRA_API_URL: ${{ inputs.api-url }}
+        ESTEIRA_TOKEN: ${{ inputs.token }}
+        RESULTS_DIR: ${{ inputs.results-dir }}
+      # $ESTEIRA_WORKFLOW_DIR vem da action "Fetch Toolkit" (steps
+      # anteriores do job) — scripts/ não vive mais neste repositório
+      # público.
+      run: "$ESTEIRA_WORKFLOW_DIR/scripts/submit-results.sh"

@@ -1,0 +1,29 @@
+name: "Run Semgrep"
+description: "SAST — analisa o código-fonte em busca de vulnerabilidades (roda localmente no runner do cliente)"
+
+inputs:
+  results-dir:
+    description: "Diretório onde salvar o resultado (semgrep.json)"
+    required: false
+    default: "results"
+  config:
+    description: >-
+      Config do Semgrep — padrão 'p/default' (ruleset nomeado do Semgrep
+      Registry, ampla cobertura multi-linguagem). NÃO use 'auto': ele exige
+      telemetria habilitada (`--metrics=off` falha com "Cannot create auto
+      config when metrics are off") — descoberto rodando isto de verdade,
+      não é só recomendação por precaução.
+    required: false
+    default: "p/default"
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      env:
+        RESULTS_DIR: ${{ inputs.results-dir }}
+        SEMGREP_CONFIG: ${{ inputs.config }}
+      # $ESTEIRA_WORKFLOW_DIR vem da action "Fetch Toolkit" (steps
+      # anteriores do job) — scripts/ não vive mais neste repositório
+      # público.
+      run: "$ESTEIRA_WORKFLOW_DIR/scripts/run-semgrep.sh"
