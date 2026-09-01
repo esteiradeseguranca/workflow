@@ -13,7 +13,27 @@ name: Esteira de Segurança — Scan
 # Por isso usamos a forma "owner/repo/path@ref", que sempre aponta para este
 # repositório, independente de quem chamou o workflow.
 #
-# IMPORTANTE #2: este repositório é PÚBLICO (necessário — reusable workflow
+# IMPORTANTE #2: os refs abaixo (owner/repo@ref) são LITERAIS, não
+# `${{ inputs.x }}` — ACHADO RODANDO DE VERDADE contra o GitHub (não só
+# lendo o YAML): `jobs.<job_id>.steps[*].uses` NÃO aceita o contexto
+# `inputs` (nem `env`, nem a maioria dos outros) — só um conjunto bem
+# restrito de contextos é resolvido nesse campo, e `inputs` não está nele.
+# Tentar `uses: ${{ inputs.actions-source }}/...@${{ inputs.actions-ref }}`
+# falha na hora de resolver o workflow chamado, ANTES de qualquer job
+# começar ("Unrecognized named-value: 'inputs'"), mesmo com o YAML sendo
+# perfeitamente válido — só descoberto testando de ponta a ponta contra o
+# GitHub de verdade (repositório de teste + cliente piloto), nunca antes.
+# Por isso os 10 `uses:` abaixo são hardcoded pra "esteiradeseguranca/workflow@v1"
+# — ao cortar uma tag nova que quebra compatibilidade (v2), esses 10
+# valores são atualizados TODOS JUNTOS como parte de preparar aquele
+# arquivo `security-scan.yml@v2`, é assim que a fixação de versão
+# continua funcionando apesar da limitação. `actions-ref` (input abaixo)
+# continua existindo, mas só controla a tag do TOOLKIT buscado em
+# GET /v1/toolkit (usado dentro de `with:`, que ACEITA o contexto
+# `inputs` normalmente) — não afeta mais a resolução das composite
+# actions.
+#
+# IMPORTANTE #3: este repositório é PÚBLICO (necessário — reusable workflow
 # privado só funciona pra chamador dentro da MESMA organização, e clientes
 # são empresas externas), mas só contém ORQUESTRAÇÃO (este arquivo +
 # actions/ + .gitlab/ + examples/). scripts/ e rules/ — o "molho secreto"
@@ -36,18 +56,14 @@ on:
         type: boolean
         required: false
         default: false
-      actions-source:
-        description: "[uso interno] owner/repo onde vivem as composite actions desta esteira"
-        type: string
-        required: false
-        default: "esteiradeseguranca/workflow"
       actions-ref:
         description: >-
-          [uso interno] tag/ref das composite actions — deve acompanhar a
-          tag deste workflow. TAMBÉM usado como a tag do bundle buscado em
-          GET /v1/toolkit (ver "Buscar toolkit" abaixo) — cortar uma tag
-          nova do workflow sempre exige subir um bundle correspondente
-          pela área administrativa (Workflow → nova tag).
+          [uso interno] tag do bundle buscado em GET /v1/toolkit (scripts/
+          regras privadas) — deve acompanhar a tag deste workflow. NÃO
+          controla mais a versão das composite actions (essas são
+          hardcoded neste arquivo — ver "IMPORTANTE #2" acima); cortar uma
+          tag nova exige subir um bundle correspondente pela área
+          administrativa (Workflow → nova tag).
         type: string
         required: false
         default: "v1"
@@ -70,7 +86,7 @@ jobs:
           fetch-depth: 0
 
       - name: Buscar toolkit (scripts/regras privadas)
-        uses: ${{ inputs.actions-source }}/actions/fetch-toolkit@${{ inputs.actions-ref }}
+        uses: esteiradeseguranca/workflow/actions/fetch-toolkit@v1
         with:
           api-url: ${{ inputs.api-url }}
           token: ${{ secrets.token }}
@@ -78,34 +94,34 @@ jobs:
 
       - name: Consultar plano contratado (entitlements)
         id: entitlements
-        uses: ${{ inputs.actions-source }}/actions/fetch-entitlements@${{ inputs.actions-ref }}
+        uses: esteiradeseguranca/workflow/actions/fetch-entitlements@v1
         with:
           api-url: ${{ inputs.api-url }}
           token: ${{ secrets.token }}
 
       - name: Semgrep (SAST)
         if: steps.entitlements.outputs.semgrep == 'true'
-        uses: ${{ inputs.actions-source }}/actions/run-semgrep@${{ inputs.actions-ref }}
+        uses: esteiradeseguranca/workflow/actions/run-semgrep@v1
 
       - name: Gitleaks (segredos)
         if: steps.entitlements.outputs.gitleaks == 'true'
-        uses: ${{ inputs.actions-source }}/actions/run-gitleaks@${{ inputs.actions-ref }}
+        uses: esteiradeseguranca/workflow/actions/run-gitleaks@v1
 
       - name: Trivy (SCA / dependências)
         if: steps.entitlements.outputs.trivy_fs == 'true'
-        uses: ${{ inputs.actions-source }}/actions/run-trivy-fs@${{ inputs.actions-ref }}
+        uses: esteiradeseguranca/workflow/actions/run-trivy-fs@v1
 
       - name: Checkov (IaC)
         if: steps.entitlements.outputs.checkov == 'true'
-        uses: ${{ inputs.actions-source }}/actions/run-checkov@${{ inputs.actions-ref }}
+        uses: esteiradeseguranca/workflow/actions/run-checkov@v1
 
       - name: SBOM (Syft)
         if: steps.entitlements.outputs.sbom == 'true'
-        uses: ${{ inputs.actions-source }}/actions/run-sbom@${{ inputs.actions-ref }}
+        uses: esteiradeseguranca/workflow/actions/run-sbom@v1
 
       - name: Verificação de EOL (endoflife.date)
         if: steps.entitlements.outputs.eol_check == 'true'
-        uses: ${{ inputs.actions-source }}/actions/run-eol-check@${{ inputs.actions-ref }}
+        uses: esteiradeseguranca/workflow/actions/run-eol-check@v1
 
       - name: Guardar resultados como artifact
         if: always()
@@ -118,14 +134,14 @@ jobs:
 
       - name: Enviar resultados para a Esteira de Segurança
         if: always()
-        uses: ${{ inputs.actions-source }}/actions/submit-results@${{ inputs.actions-ref }}
+        uses: esteiradeseguranca/workflow/actions/submit-results@v1
         with:
           api-url: ${{ inputs.api-url }}
           token: ${{ secrets.token }}
 
       - name: Verificar achados críticos
         if: inputs.fail-on-critical == true
-        uses: ${{ inputs.actions-source }}/actions/check-critical@${{ inputs.actions-ref }}
+        uses: esteiradeseguranca/workflow/actions/check-critical@v1
         with:
           api-url: ${{ inputs.api-url }}
           token: ${{ secrets.token }}
