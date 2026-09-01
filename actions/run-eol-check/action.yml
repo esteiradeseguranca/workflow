@@ -6,7 +6,7 @@ description: >-
 
 inputs:
   results-dir:
-    description: "Diretório onde salvar o resultado (eol-check.json)"
+    description: "Diretório onde salvar o resultado (eol_check.json)"
     required: false
     default: "results"
 

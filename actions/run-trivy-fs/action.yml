@@ -3,7 +3,7 @@ description: "SCA — verifica vulnerabilidades conhecidas nas dependências do 
 
 inputs:
   results-dir:
-    description: "Diretório onde salvar o resultado (trivy-fs.json)"
+    description: "Diretório onde salvar o resultado (trivy_fs.json)"
     required: false
     default: "results"
 
