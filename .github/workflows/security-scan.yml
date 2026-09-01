@@ -33,14 +33,6 @@ name: Esteira de Segurança — Scan
 # `with:`, que ACEITA o contexto `inputs` normalmente) — não afeta mais
 # a resolução das composite actions.
 #
-# TEMPORÁRIO — PRÉ-v1: os 10 `uses:` abaixo apontam pra "@main" (não
-# "@v1") porque a tag v1 ainda não foi cortada em
-# esteiradeseguranca/workflow — estamos validando com o cliente piloto
-# (WebGoat) antes de cortar a tag oficial, como planejado. Assim que a
-# validação passar, trocar as 10 ocorrências de "@main" para "@v1" (e
-# só então cortar a tag v1 em esteiradeseguranca/workflow) como parte
-# do release oficial.
-#
 # IMPORTANTE #3: este repositório é PÚBLICO (necessário — reusable workflow
 # privado só funciona pra chamador dentro da MESMA organização, e clientes
 # são empresas externas), mas só contém ORQUESTRAÇÃO (este arquivo +
@@ -94,7 +86,7 @@ jobs:
           fetch-depth: 0
 
       - name: Buscar toolkit (scripts/regras privadas)
-        uses: esteiradeseguranca/workflow/actions/fetch-toolkit@main
+        uses: esteiradeseguranca/workflow/actions/fetch-toolkit@v1
         with:
           api-url: ${{ inputs.api-url }}
           token: ${{ secrets.token }}
@@ -102,34 +94,34 @@ jobs:
 
       - name: Consultar plano contratado (entitlements)
         id: entitlements
-        uses: esteiradeseguranca/workflow/actions/fetch-entitlements@main
+        uses: esteiradeseguranca/workflow/actions/fetch-entitlements@v1
         with:
           api-url: ${{ inputs.api-url }}
           token: ${{ secrets.token }}
 
       - name: Semgrep (SAST)
         if: steps.entitlements.outputs.semgrep == 'true'
-        uses: esteiradeseguranca/workflow/actions/run-semgrep@main
+        uses: esteiradeseguranca/workflow/actions/run-semgrep@v1
 
       - name: Gitleaks (segredos)
         if: steps.entitlements.outputs.gitleaks == 'true'
-        uses: esteiradeseguranca/workflow/actions/run-gitleaks@main
+        uses: esteiradeseguranca/workflow/actions/run-gitleaks@v1
 
       - name: Trivy (SCA / dependências)
         if: steps.entitlements.outputs.trivy_fs == 'true'
-        uses: esteiradeseguranca/workflow/actions/run-trivy-fs@main
+        uses: esteiradeseguranca/workflow/actions/run-trivy-fs@v1
 
       - name: Checkov (IaC)
         if: steps.entitlements.outputs.checkov == 'true'
-        uses: esteiradeseguranca/workflow/actions/run-checkov@main
+        uses: esteiradeseguranca/workflow/actions/run-checkov@v1
 
       - name: SBOM (Syft)
         if: steps.entitlements.outputs.sbom == 'true'
-        uses: esteiradeseguranca/workflow/actions/run-sbom@main
+        uses: esteiradeseguranca/workflow/actions/run-sbom@v1
 
       - name: Verificação de EOL (endoflife.date)
         if: steps.entitlements.outputs.eol_check == 'true'
-        uses: esteiradeseguranca/workflow/actions/run-eol-check@main
+        uses: esteiradeseguranca/workflow/actions/run-eol-check@v1
 
       - name: Guardar resultados como artifact
         if: always()
@@ -142,14 +134,14 @@ jobs:
 
       - name: Enviar resultados para a Esteira de Segurança
         if: always()
-        uses: esteiradeseguranca/workflow/actions/submit-results@main
+        uses: esteiradeseguranca/workflow/actions/submit-results@v1
         with:
           api-url: ${{ inputs.api-url }}
           token: ${{ secrets.token }}
 
       - name: Verificar achados críticos
         if: inputs.fail-on-critical == true
-        uses: esteiradeseguranca/workflow/actions/check-critical@main
+        uses: esteiradeseguranca/workflow/actions/check-critical@v1
         with:
           api-url: ${{ inputs.api-url }}
           token: ${{ secrets.token }}
