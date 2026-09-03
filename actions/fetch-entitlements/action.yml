@@ -26,6 +26,9 @@ outputs:
   sbom:
     description: "true/false — gerar SBOM (Syft)"
     value: ${{ steps.fetch.outputs.sbom }}
+  grype:
+    description: "true/false — rodar Grype (SCA — segunda opinião, lê o SBOM do Syft). Exige sbom também true."
+    value: ${{ steps.fetch.outputs.grype }}
   eol_check:
     description: "true/false — checar linguagens/runtimes/serviços fora de suporte (EOL) via endoflife.date"
     value: ${{ steps.fetch.outputs.eol_check }}

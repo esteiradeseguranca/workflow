@@ -32,6 +32,7 @@ actions/
   run-trivy-fs/                       # SCA / vulnerabilidades em dependências
   run-checkov/                        # IaC (Terraform, CloudFormation, K8s, Dockerfile...)
   run-sbom/                           # gera SBOM (CycloneDX) via Syft
+  run-grype/                          # SCA "segunda opinião" — lê o SBOM que o passo acima já gerou
   run-eol-check/                      # linguagem/runtime/serviço fora de suporte (EOL), via endoflife.date
   check-critical/                     # falha o job se achado crítico for encontrado (fail-on-critical)
   submit-results/                     # envia os resultados pra API da Esteira de Segurança
@@ -77,6 +78,10 @@ linguagem) ao mais amplo (qualquer arquivo texto):
 - **Trivy fs (SCA/dependências)** — detecta manifestos/lockfiles de 13
   linguagens: Ruby, Python, PHP, Node.js, .NET, Java (Maven/Gradle), Go,
   Rust, C/C++, Elixir, Dart, Swift, Julia.
+- **Grype (SCA — segunda opinião)** — mesma classe de achado do Trivy
+  (CVE em dependência), motor de detecção e banco de vulnerabilidades
+  independentes (Anchore). Não escaneia o filesystem de novo — lê o SBOM
+  que o passo de SBOM (Syft) já gerou. Requer SBOM habilitado no plano.
 - **Checkov (IaC)** — Terraform (AWS/GCP/Azure/OCI), CloudFormation
   (incluindo SAM), Azure Resource Manager (ARM), Serverless Framework,
   Helm, Kubernetes, Dockerfile — e, via checks adicionais do próprio

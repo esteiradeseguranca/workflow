@@ -23,9 +23,9 @@ name: Esteira de Segurança — Scan
 # começar ("Unrecognized named-value: 'inputs'"), mesmo com o YAML sendo
 # perfeitamente válido — só descoberto testando de ponta a ponta contra o
 # GitHub de verdade (repositório de teste + cliente piloto), nunca antes.
-# Por isso os 10 `uses:` abaixo são hardcoded pra um ref fixo do próprio
+# Por isso os `uses:` abaixo são hardcoded pra um ref fixo do próprio
 # repositório de workflow — ao cortar uma tag nova que quebra
-# compatibilidade (ex.: v2), esses 10 valores são atualizados TODOS
+# compatibilidade (ex.: v2), esses valores são atualizados TODOS
 # JUNTOS como parte de preparar aquele arquivo `security-scan.yml@v2`,
 # é assim que a fixação de versão continua funcionando apesar da
 # limitação. `actions-ref` (input abaixo) continua existindo, mas só
@@ -147,6 +147,14 @@ jobs:
       - name: SBOM (Syft)
         if: steps.entitlements.outputs.sbom == 'true'
         uses: esteiradeseguranca/workflow/actions/run-sbom@v1
+
+      - name: Grype (SCA — segunda opinião)
+        # DEPENDE do passo de SBOM acima já ter rodado (lê results/sbom.json
+        # gerado por ele) — por isso as duas condições, não só a de grype.
+        # Ver scripts/run-grype.sh: sem SBOM presente, o script avisa e sai
+        # sem quebrar o scan, mas exigir os dois aqui evita a chamada em vão.
+        if: steps.entitlements.outputs.sbom == 'true' && steps.entitlements.outputs.grype == 'true'
+        uses: esteiradeseguranca/workflow/actions/run-grype@v1
 
       - name: Verificação de EOL (endoflife.date)
         if: steps.entitlements.outputs.eol_check == 'true'
