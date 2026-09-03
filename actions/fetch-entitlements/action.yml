@@ -32,6 +32,9 @@ outputs:
   eol_check:
     description: "true/false — checar linguagens/runtimes/serviços fora de suporte (EOL) via endoflife.date"
     value: ${{ steps.fetch.outputs.eol_check }}
+  license_compliance:
+    description: "true/false — classificar licença de cada componente do SBOM (copyleft forte/fraco/não reconhecida). Exige sbom também true."
+    value: ${{ steps.fetch.outputs.license_compliance }}
   raw:
     description: "JSON cru retornado pela API (ou o fallback da camada Básica)"
     value: ${{ steps.fetch.outputs.raw }}

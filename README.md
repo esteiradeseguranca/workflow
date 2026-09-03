@@ -33,6 +33,7 @@ actions/
   run-checkov/                        # IaC (Terraform, CloudFormation, K8s, Dockerfile...)
   run-sbom/                           # gera SBOM (CycloneDX) via Syft
   run-grype/                          # SCA "segunda opinião" — lê o SBOM que o passo acima já gerou
+  run-license-compliance/             # compliance de licença — lê o mesmo SBOM, classifica copyleft forte/fraco/desconhecida
   run-eol-check/                      # linguagem/runtime/serviço fora de suporte (EOL), via endoflife.date
   check-critical/                     # falha o job se achado crítico for encontrado (fail-on-critical)
   submit-results/                     # envia os resultados pra API da Esteira de Segurança
@@ -82,6 +83,11 @@ linguagem) ao mais amplo (qualquer arquivo texto):
   (CVE em dependência), motor de detecção e banco de vulnerabilidades
   independentes (Anchore). Não escaneia o filesystem de novo — lê o SBOM
   que o passo de SBOM (Syft) já gerou. Requer SBOM habilitado no plano.
+- **Compliance de licença** — não é scanner de dependência, é uma
+  classificação sobre o mesmo SBOM que o Grype lê: sinaliza componente
+  com licença copyleft forte (GPL/AGPL/SSPL), copyleft fraco (LGPL/MPL/
+  EPL/CDDL) ou não reconhecida. Licença permissiva (MIT/Apache/BSD/...)
+  não gera achado, de propósito. Requer SBOM habilitado no plano.
 - **Checkov (IaC)** — Terraform (AWS/GCP/Azure/OCI), CloudFormation
   (incluindo SAM), Azure Resource Manager (ARM), Serverless Framework,
   Helm, Kubernetes, Dockerfile — e, via checks adicionais do próprio
@@ -114,6 +120,17 @@ de vulnerabilidade (que depende de CVE já catalogado pra uma dependência
 específica), isto é um risco estrutural: existe mesmo sem nenhum CVE
 conhecido hoje, porque a próxima vulnerabilidade descoberta numa versão EOL
 não vai ganhar correção oficial.
+
+### Compliance de licença
+
+`actions/run-license-compliance/` classifica a licença de cada componente
+do SBOM (CycloneDX/Syft) que o passo de SBOM já gerou — não escaneia o
+filesystem de novo, mesma ideia do Grype. Copyleft forte (GPL/AGPL/SSPL)
+ou licença não reconhecida entram como achado de risco mais alto; copyleft
+fraco (LGPL/MPL/EPL/CDDL) como risco médio; licença permissiva (MIT/
+Apache/BSD/...) não gera achado — senão toda dependência do projeto
+viraria apontamento. Requer SBOM habilitado no plano do cliente (roda
+depois dele no pipeline).
 
 ### Versionamento
 

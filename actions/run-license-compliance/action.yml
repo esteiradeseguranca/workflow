@@ -1,0 +1,22 @@
+name: "Run License Compliance"
+description: >-
+  Classifica a licença de cada componente do SBOM (CycloneDX/Syft) e
+  sinaliza licença copyleft (forte/fraca) ou não reconhecida. Precisa do
+  passo de SBOM já ter rodado antes (lê results/sbom.json).
+
+inputs:
+  results-dir:
+    description: "Diretório com sbom.json e onde salvar o resultado (license_compliance.json)"
+    required: false
+    default: "results"
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      env:
+        RESULTS_DIR: ${{ inputs.results-dir }}
+      # $ESTEIRA_WORKFLOW_DIR vem da action "Fetch Toolkit" (steps
+      # anteriores do job) — scripts/ não vive mais neste repositório
+      # público.
+      run: "$ESTEIRA_WORKFLOW_DIR/scripts/run-license-compliance.sh"

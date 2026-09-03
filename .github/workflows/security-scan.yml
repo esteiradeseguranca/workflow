@@ -156,6 +156,13 @@ jobs:
         if: steps.entitlements.outputs.sbom == 'true' && steps.entitlements.outputs.grype == 'true'
         uses: esteiradeseguranca/workflow/actions/run-grype@v1
 
+      - name: Compliance de licença
+        # Mesma dependência dupla do Grype acima, pelo mesmo motivo: lê
+        # results/sbom.json em vez de escanear de novo (ver
+        # scripts/run-license-compliance.sh).
+        if: steps.entitlements.outputs.sbom == 'true' && steps.entitlements.outputs.license_compliance == 'true'
+        uses: esteiradeseguranca/workflow/actions/run-license-compliance@v1
+
       - name: Verificação de EOL (endoflife.date)
         if: steps.entitlements.outputs.eol_check == 'true'
         uses: esteiradeseguranca/workflow/actions/run-eol-check@v1
