@@ -55,6 +55,41 @@ além do que o GitHub Actions já provê (`ubuntu-latest` tem Docker). O EOL
 check é exceção: não é um scanner de terceiro, é um módulo próprio em Python
 puro, sem dependência externa.
 
+### Cobertura por linguagem/ferramenta
+
+Nenhuma ferramenta roda com filtro de linguagem — cada uma cobre o que a
+versão pinada dela cobre nativamente. Resumo, do mais específico (por
+linguagem) ao mais amplo (qualquer arquivo texto):
+
+- **Semgrep (SAST)** — ruleset `p/default` (registry oficial), cobrindo as
+  linguagens GA do Semgrep em 3 níveis de profundidade de análise:
+  - Cross-file: C#, Go, Java, JavaScript, Kotlin, Python, TypeScript, C/C++
+  - Cross-function: JSX, Ruby, Scala, Swift, Rust, PHP, Terraform
+  - Suporte básico: Generic, JSON
+
+  As regras customizadas próprias da Esteira de Segurança (privadas,
+  buscadas via `actions/fetch-toolkit` — ver acima) cobrem hoje **Python**,
+  **JavaScript/TypeScript** e **Java**, mais duas regras independentes de
+  linguagem (CPF/CNPJ hardcoded, CORS mal configurado).
+- **Gitleaks (segredos)** — independente de linguagem: varre todo arquivo
+  texto e o histórico completo do git contra um conjunto de regex/entropia.
+  Não importa em que linguagem o segredo está hardcoded.
+- **Trivy fs (SCA/dependências)** — detecta manifestos/lockfiles de 13
+  linguagens: Ruby, Python, PHP, Node.js, .NET, Java (Maven/Gradle), Go,
+  Rust, C/C++, Elixir, Dart, Swift, Julia.
+- **Checkov (IaC)** — Terraform (AWS/GCP/Azure/OCI), CloudFormation
+  (incluindo SAM), Azure Resource Manager (ARM), Serverless Framework,
+  Helm, Kubernetes, Dockerfile — e, via checks adicionais do próprio
+  Checkov, também Ansible, Argo Workflows, Bicep, Bitbucket Pipelines,
+  CircleCI, GitHub Actions, GitLab CI, OpenAPI.
+- **SBOM (Syft)** — inventário de componentes em dezenas de ecossistemas;
+  os mais relevantes pra código-fonte (sem imagem de container): Python,
+  Java, JavaScript/Node, Ruby, Rust, PHP, Go, .NET — e mais. Não gera
+  achado de vulnerabilidade sozinho (é inventário puro).
+- **EOL check** — cobertura bem mais estreita, de propósito (ver seção
+  própria abaixo): Python, Node, Go, Ruby e PHP via manifest, mais
+  qualquer linguagem/runtime/serviço citado num `FROM` de Dockerfile.
+
 ### Camada Básica (padrão, sempre disponível)
 
 Se a API de entitlements ainda não existir ou o token não puder ser
