@@ -1,0 +1,36 @@
+name: "Run OpenSSF Scorecard"
+description: >-
+  Avalia a higiene do próprio repositório (branch protection, code review
+  obrigatório, dependência pinada, SAST em uso, política de segurança
+  publicada...) via OpenSSF Scorecard. SÓ funciona pra repositório
+  hospedado no GitHub — consulta a API do GitHub, não escaneia o
+  filesystem.
+
+inputs:
+  results-dir:
+    description: "Diretório onde salvar o resultado (scorecard.json)"
+    required: false
+    default: "results"
+  github-token:
+    description: >-
+      Token com acesso à API do GitHub pro Scorecard consultar branch
+      protection/workflows/releases do repositório. Por padrão usa o
+      `github.token` automático da própria execução — cobre a maioria dos
+      checks; se muitos checks voltarem inconclusivos num repositório
+      privado, considere passar um PAT dedicado com escopo maior (ver
+      documentação do OpenSSF Scorecard sobre "PAT token").
+    required: false
+    default: ${{ github.token }}
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      env:
+        RESULTS_DIR: ${{ inputs.results-dir }}
+        GITHUB_TOKEN_FOR_SCORECARD: ${{ inputs.github-token }}
+      # $ESTEIRA_WORKFLOW_DIR vem da action "Fetch Toolkit" (steps
+      # anteriores do job) — scripts/ não vive mais neste repositório
+      # público. $GITHUB_REPOSITORY já vem preenchido pelo próprio runner
+      # do GitHub Actions.
+      run: "$ESTEIRA_WORKFLOW_DIR/scripts/run-scorecard.sh"

@@ -1,0 +1,19 @@
+name: "Run KICS"
+description: >-
+  IaC — "segunda opinião" do Checkov: más configurações em Terraform,
+  CloudFormation, Kubernetes, Dockerfile, GitHub Actions etc., motor de
+  detecção independente (Checkmarx/KICS em vez de Bridgecrew/Checkov).
+
+inputs:
+  results-dir:
+    description: "Diretório onde salvar o resultado (kics.json)"
+    required: false
+    default: "results"
+
+runs:
+  using: "composite"
+  steps:
+    - shell: bash
+      env:
+        RESULTS_DIR: ${{ inputs.results-dir }}
+      run: "$ESTEIRA_WORKFLOW_DIR/scripts/run-kics.sh"
