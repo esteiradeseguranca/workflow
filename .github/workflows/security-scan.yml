@@ -115,12 +115,33 @@ jobs:
           api-url: ${{ inputs.api-url }}
           token: ${{ secrets.token }}
 
+      # A PARTIR DAQUI, cada ferramenta roda com `id:` + `continue-on-error:
+      # true` — a pedido do usuário: "criar contorno nas execuções das
+      # ferramentas de análise para se alguma der problema não impedir a
+      # execução das outras." Sem isso, uma ferramenta que quebra (ex.:
+      # KICS deu "Permission denied" — achado rodando de verdade contra o
+      # cliente piloto WebGoat) marca o JOB como falho e todo passo
+      # SEGUINTE cujo `if:` não tenha `always()` é pulado (comportamento
+      # padrão do GitHub Actions: um `if:` sem `always()`/`failure()`/
+      # `cancelled()` sempre inclui `&& success()` por baixo dos panos) —
+      # foi assim que Grype/Compliance de licença/EOL/Scorecard ficaram
+      # "skipped" em cadeia depois do KICS falhar, mesmo suas condições
+      # não tendo nada a ver com o KICS. `continue-on-error: true` faz a
+      # CONCLUSÃO do passo virar "success" mesmo com o script tendo saído
+      # com erro (o `outcome` cru continua "failure", é isso que o passo
+      # "Coletar erros de execução" abaixo lê) — os passos seguintes
+      # continuam vendo `success()` normalmente, sem precisar adicionar
+      # `always()` em cada `if:` deles.
       - name: Semgrep (SAST)
+        id: semgrep
         if: steps.entitlements.outputs.semgrep == 'true'
+        continue-on-error: true
         uses: esteiradeseguranca/workflow/actions/run-semgrep@v1
 
       - name: Gitleaks (segredos)
+        id: gitleaks
         if: steps.entitlements.outputs.gitleaks == 'true'
+        continue-on-error: true
         uses: esteiradeseguranca/workflow/actions/run-gitleaks@v1
 
       - name: Cache de dependências Maven (repositórios Java, antes do Trivy)
@@ -134,25 +155,34 @@ jobs:
 
       - name: Aquecer cache Maven (antes do Trivy)
         if: steps.entitlements.outputs.trivy_fs == 'true'
+        continue-on-error: true
         uses: esteiradeseguranca/workflow/actions/warm-maven-cache@v1
 
       - name: Trivy (SCA / dependências)
+        id: trivy_fs
         if: steps.entitlements.outputs.trivy_fs == 'true'
+        continue-on-error: true
         uses: esteiradeseguranca/workflow/actions/run-trivy-fs@v1
 
       - name: Checkov (IaC)
+        id: checkov
         if: steps.entitlements.outputs.checkov == 'true'
+        continue-on-error: true
         uses: esteiradeseguranca/workflow/actions/run-checkov@v1
 
       - name: KICS (IaC — segunda opinião)
         # Escaneia o filesystem direto, sem depender de nenhum outro
         # passo (diferente de Grype/Compliance de licença) — mesma classe
         # de achado do Checkov acima, motor de detecção independente.
+        id: kics
         if: steps.entitlements.outputs.kics == 'true'
+        continue-on-error: true
         uses: esteiradeseguranca/workflow/actions/run-kics@v1
 
       - name: SBOM (Syft)
+        id: sbom
         if: steps.entitlements.outputs.sbom == 'true'
+        continue-on-error: true
         uses: esteiradeseguranca/workflow/actions/run-sbom@v1
 
       - name: Grype (SCA — segunda opinião)
@@ -160,18 +190,24 @@ jobs:
         # gerado por ele) — por isso as duas condições, não só a de grype.
         # Ver scripts/run-grype.sh: sem SBOM presente, o script avisa e sai
         # sem quebrar o scan, mas exigir os dois aqui evita a chamada em vão.
+        id: grype
         if: steps.entitlements.outputs.sbom == 'true' && steps.entitlements.outputs.grype == 'true'
+        continue-on-error: true
         uses: esteiradeseguranca/workflow/actions/run-grype@v1
 
       - name: Compliance de licença
         # Mesma dependência dupla do Grype acima, pelo mesmo motivo: lê
         # results/sbom.json em vez de escanear de novo (ver
         # scripts/run-license-compliance.sh).
+        id: license_compliance
         if: steps.entitlements.outputs.sbom == 'true' && steps.entitlements.outputs.license_compliance == 'true'
+        continue-on-error: true
         uses: esteiradeseguranca/workflow/actions/run-license-compliance@v1
 
       - name: Verificação de EOL (endoflife.date)
+        id: eol_check
         if: steps.entitlements.outputs.eol_check == 'true'
+        continue-on-error: true
         uses: esteiradeseguranca/workflow/actions/run-eol-check@v1
 
       - name: OpenSSF Scorecard (higiene do repositório)
@@ -181,8 +217,48 @@ jobs:
         # Só funciona pra repositório hospedado no GitHub — o próprio
         # script detecta isso e sai sem quebrar o scan se não for o caso
         # (ex.: reusable workflow chamado a partir de um mirror não-GitHub).
+        id: scorecard
         if: steps.entitlements.outputs.scorecard == 'true'
+        continue-on-error: true
         uses: esteiradeseguranca/workflow/actions/run-scorecard@v1
+
+      - name: Coletar erros de execução das ferramentas
+        # `if: always()` — precisa rodar mesmo se alguma ferramenta acima
+        # falhou (é justamente pra reportar isso). Lê o OUTCOME cru
+        # (`steps.<id>.outcome`, NÃO afetado por `continue-on-error` —
+        # `conclusion` que seria mascarado) de cada passo com `id:` acima;
+        # ausente/"skipped" (ferramenta não habilitada) não conta como
+        # erro, só "failure" conta. Guarda em $GITHUB_ENV (ESTEIRA_TOOL_ERRORS,
+        # JSON compacto) pro passo "Enviar resultados" logo abaixo incluir
+        # no manifest — a pedido do usuário: "informar na área do cliente
+        # que e qual execução da ferramenta de scan deu erro." Também
+        # imprime `::error::` por ferramenta, pra aparecer destacado nas
+        # Annotations do resumo do run — a pedido do usuário: "Mostrar na
+        # console da execução que deu erro."
+        id: collect-tool-errors
+        if: always()
+        shell: bash
+        env:
+          # `toJson(steps)` vai por ENV, não colado direto no `run:` —
+          # o JSON tem aspas duplas de sobra, colar direto quebraria o
+          # script (a substituição `${{ }}` é textual, ANTES do bash
+          # rodar). Via `env:`, o runner passa isso como variável de
+          # ambiente de verdade, sem esse risco de quebrar a sintaxe.
+          STEPS_JSON: ${{ toJson(steps) }}
+        run: |
+          FAILED=()
+          for tool in semgrep gitleaks trivy_fs checkov kics sbom grype license_compliance eol_check scorecard; do
+            value=$(echo "$STEPS_JSON" | jq -r --arg t "$tool" '.[$t].outcome // "not-run"')
+            if [[ "$value" == "failure" ]]; then
+              FAILED+=("$tool")
+              echo "::error::A ferramenta '$tool' falhou ao executar (ver o log do passo acima) — as outras continuaram normalmente."
+            fi
+          done
+          json=$(printf '%s\n' "${FAILED[@]:-}" | jq -R . | jq -sc 'map(select(length > 0))')
+          echo "ESTEIRA_TOOL_ERRORS=${json}" >> "$GITHUB_ENV"
+          if [[ "$json" != "[]" ]]; then
+            echo "Ferramentas com erro de execução: ${json}"
+          fi
 
       - name: Guardar resultados como artifact
         if: always()
